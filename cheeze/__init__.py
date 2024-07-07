@@ -1,10 +1,10 @@
 from . import layout_manager, app, animation, shader, widget, event
-from layout_manager import *
-from app import *
-from animation import *
-from shader import *
-from widget import *
-from event import *
+from .layout_manager import *
+from .app import *
+from .animation import *
+from .shader import *
+from .widget import *
+from .event import *
 
 __all__ = [
     "layout_manager",

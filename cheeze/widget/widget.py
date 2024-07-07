@@ -13,7 +13,7 @@ class Widget(abc.ABC):
         self._shader_name = shader
         self.shader: ShaderObject = None
         self.layout_object: LayoutObject = None
-        self.animation: AnimationObject = None
+        self.animation: list[AnimationObject] = []
 
     def set_build_context(self, build_context: BuildContext):
         """
@@ -22,8 +22,8 @@ class Widget(abc.ABC):
         """
         self.build_context = build_context
         self.shader_cls = build_context.shader_pack.shaders[self._shader_name]
-        if self.animation is not None:
-            self.animation.set_build_context(build_context)
+        for x in self.animation:
+            x.set_build_context(build_context)
         if self.shader is not None:
             self.shader.set_build_context(build_context)
         self.init()
@@ -50,4 +50,19 @@ class Widget(abc.ABC):
 
         dt is time since last frame in seconds
         """
-        self.animation.next_frame()
+
+        animationresult = None       
+        while len(self.animation) > 0:  # Keep doing this as long as there are animations and we don't have a proper animation result object
+            animationresult = self.animation[0].next_frame()
+            if animationresult is None:
+                self.animation.pop(0)
+            else:
+                break
+        
+        if animationresult is None:  # Direct shading
+            self.shader.shade()
+            
+    
+    def add_animation(self, animation: AnimationObject):
+        self.animation.append(animation)
+        animation.set_build_context(self.build_context)

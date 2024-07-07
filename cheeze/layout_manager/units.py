@@ -20,6 +20,8 @@ _UNITS = {
     "f": UNIT.f
 }
 
+_UNITS_REVERSED = {v: k for k, v in _UNITS.items()}
+
 # The actual Unit object used for calculations etc...
 class LUnit:
     """
@@ -67,8 +69,6 @@ class LUnit:
         assert self.unit == other.unit, "Different Units cannot be added"
         return other
         
-
-
     # Below are the classic addition, subtraction, multiplication and division functions
     def __add__(self, other: "LUnit") -> "LUnit":
         other = self._check_math(other)
@@ -82,7 +82,7 @@ class LUnit:
         other = self._check_math(other)
         return LUnit(self.val * other.val, self.unit)
 
-    def __div__(self, other: "LUnit") -> "LUnit":
+    def __truediv__(self, other: "LUnit") -> "LUnit":
         other = self._check_math(other)
         return LUnit(self.val / other.val, self.unit)
     
@@ -98,20 +98,23 @@ class LUnit:
         """
         match self.unit:
             case UNIT.px:
-                return LUnit(min(self.val, space), UNIT.px)
+                return LUnit(min(space, self.val), UNIT.px)
             case UNIT.percent:
-                return LUnit(min(self.val, 100)*space/100, UNIT.px)
+                return LUnit(min(space, self.val*space/100), UNIT.px)
             case UNIT.vh:
                 return LUnit(min(space, min(self.val, 100)*viewport_space.y.val/100), UNIT.px)
             case UNIT.vw:
                 return LUnit(min(space, min(self.val, 100)*viewport_space.x.val/100), UNIT.px)
             case UNIT.f:
-                return LUnit(space, UNIT.px) # TODO: FIX THIS
+                return LUnit(space, UNIT.px)
             case _:
                 raise TypeError(f"Unknown Unit Type: {self.unit}")
     
     def __repr__(self) -> str:
-        return f"{self.val}{self.unit.name}"
+        return f"{self.val}{_UNITS_REVERSED[self.unit]}"
+    
+    def __abs__(self) -> int:
+        return self.val
     
     def as_float(self) -> float:
         return self.val
@@ -154,7 +157,7 @@ class LUnit2:
             return LUnit2(self.x * others[0], self.y * others[1])
         return LUnit2(self.x * others.x, self.y * others.y)
     
-    def __div__(self, others: "LUnit2") -> "LUnit2":
+    def __truediv__(self, others: "LUnit2") -> "LUnit2":
         if isinstance(others, tuple):
             return LUnit2(self.x / others[0], self.y / others[1])
         return LUnit2(self.x / others.x, self.y / others.y)
@@ -180,7 +183,7 @@ class LUnit2:
         return LUnit2(self.x, LUnit(arg))
     
     def __repr__(self) -> str:
-        return f"({self.x},{self.y})"
+        return f"({self.x}, {self.y})"
     
     def as_float(self) -> tuple[float, float]:
         return (self.x.val, self.y.val)
@@ -196,12 +199,29 @@ class LRect:
     def collides_with(self, point: tuple[float, float]) -> bool:
         return _collides_rect(point, self.pos, self.size)
     
+    def collides_withr(self, rect: "LRect") -> bool:
+        if isinstance(rect, tuple):
+            rect = LRect(rect)
+        
+        if self.is_zero() or rect.is_zero():
+            return False
+        
+        # If one rectangle is left to the other
+        if self.pos[0] > (rect.pos[0] + rect.size[0]) or rect.pos[0] > (self.pos[0] + self.size[0]):
+            return False
+    
+        # If one rectangle is above other
+        if self.pos[1] > (rect.pos[1] + rect.size[1]) or rect.pos[1] > (self.pos[1] + self.size[1]):
+            return False
+    
+        return True
+    
     def is_zero(self) -> bool:
         """
         If the rectangle is zero in size
         """
-        if self.size[0] == 0 and self.size[1] == 0:
-            pass
+        return self.size[0] <= 0 or self.size[1] <= 0
+        
 
     def as_float(self) -> tuple[float, float, float, float]:
         """
@@ -216,6 +236,14 @@ class LRect:
         return (int(self.pos[0]), int(self.pos[1]), int(self.size[0]), int(self.size[1]))
     
     def __add__(self, r: "LRect") -> "LRect":
+        """
+        Returns a rectangle that encompasses the given rectangle
+        """
+        if self.is_zero():
+            return r
+        elif r.is_zero():
+            return self
+        
         left = min(self.pos[0], r.pos[0])
         top = min(self.pos[1], r.pos[1])
         right = max(self.pos[0]+self.size[0], r.pos[0]+r.size[0])
@@ -225,3 +253,32 @@ class LRect:
         h = bottom-top
 
         return LRect((left, top), (w, h))
+    
+    def clip(self, r: "LRect") -> "LRect":
+        """
+        Clip the rectangle to the bounds of a given rectangle.
+        Essentially, get the intersection of the two rectangles
+        """
+        if self.is_zero():
+            return r
+        elif r.is_zero():
+            return self
+        
+        if isinstance(r, tuple):
+            r = LRect(r[:2], r[2:])
+
+        left = max(self.pos[0], r.pos[0])
+        top = max(self.pos[1], r.pos[1])
+        right = min(self.pos[0]+self.size[0], r.pos[0]+r.size[0])
+        bottom = min(self.pos[1]+self.size[1], r.pos[1]+r.size[1])
+
+        w = right-left
+        h = bottom-top
+
+        return LRect((left, top), (w, h))
+    
+    def __repr__(self) -> str:
+        return f"LRect({self.pos}, {self.size})"
+    
+    def __hash__(self) -> int:
+        return hash((*self.pos, *self.size))

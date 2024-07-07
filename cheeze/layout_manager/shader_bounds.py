@@ -1,6 +1,7 @@
 from .utils import _collides_rect
 from .units import LRect
 from typing import Any
+import textwrap
 
 class ShaderBounds():
     """
@@ -29,7 +30,7 @@ class ShaderBounds():
         else:
             self.children = children
 
-    def check_reshade(self, point: tuple[float, float]) -> list[tuple[Any, list[tuple[float, float, float, float]]]]:
+    def check_reshade(self, rect: tuple[float, float, float, float]) -> list[tuple[Any, list[tuple[float, float, float, float]]]]:
         """
         Check what shaderbound objects are to be reshaded.
 
@@ -41,7 +42,14 @@ class ShaderBounds():
 
         this function is recursive in nature and will try to visit all shaderbound objects
         """
+
+        if isinstance(rect, tuple):
+            assert len(rect) == 4, "Collidable rectangle can only be a 4 float tuple!"
+            rect = LRect(rect[:2], rect[2:])
         reshade = []
+
+        # This shader boundaries shading area, no shading should exceed this
+        shadable_area_rect = self.get_shadable_rect()
         
         if self.rendered.is_zero():
             return reshade
@@ -49,46 +57,62 @@ class ShaderBounds():
         # A note to the future self, yes, the below covers all the cases
         # and does not miss out on any combination of drawable/partial_shader
         if self.drawable and not self.partial_shader:  # If its a whole shader
-
+            
             # If the point collides with our whole shader, append itself to reshade queue and also append all drawable children
-            if self.rendered.collides_with(point):
+            if self.rendered.collides_withr(rect):
                 reshade.append((self, None))
                 reshade.extend((x, None) for x in self.get_drawable_children())
-        
+
                 return reshade
 
         # If we are a partial shader or we are not drawble
         elif self.partial_shader or not self.drawable:
-            if self.rendered.collides_with(point):
-
-                reshadable_regions = ()  # All reshadable regions for this current partial shader
+            if self.rendered.collides_withr(rect):
+                reshadable_regions = set()  # All reshadable regions for this current partial shader
 
                 reshade_temp = []
 
+                # If we are a partial shader and drawable, then extend the area of the rectangle clipped to our render region
+                if self.drawable:
+                    self_reshade_region = rect.clip(LRect(self.pos, self.size))
+                    if not self_reshade_region.is_zero():
+                        reshadable_regions.add(self_reshade_region.as_float())
+
                 for x in self.children:
-                    child_reshades = x.check_reshade(point)
+                    child_reshades = x.check_reshade(rect)
 
                     # If we are a partial shader and drawble, we need to get the partial reshade regions
                     if len(child_reshades) != 0 and self.drawable:
                         for (x, regions) in child_reshades:
                             if regions is None:  # If the said reshade item is not partial in nature
-                                reshadable_regions.append(x.rendered.to_float())
+                                reshadable_regions.add(x.rendered.clip(shadable_area_rect).as_float())
                             else:
-                                reshadable_regions.extend(regions)
-
-                        # TODO: Make sure that the reshadable region lies inside the actual bounding box of this shader!
+                                for y in reshadable_regions:
+                                    reshadable_regions.add(shadable_area_rect.clip(LRect(y[:2], y[2:])).as_float())
                     
                     reshade_temp.extend(child_reshades)
 
                 # If we are a partial shader and drawable with partial regions pending
                 if self.drawable and len(reshadable_regions) > 0: 
-                    reshade.append((self, reshadable_regions))
+                    # Optimization: Check if the reshadable region is more or equal to self!
+                    # In case the area covered by reshadables is more, we are doing extra work and we should instead
+                    # just do the whole shading region!
+                    total_reshadable_regions_size = 0
+                    for x in reshadable_regions:
+                        total_reshadable_regions_size += x[2] * x[3]
 
-                reshade.extend(child_reshades)
+                    # if the total reshadable is more than 98% of the self size. 98% was choosen to account for floating point
+                    # inaccuracies.
+                    if total_reshadable_regions_size >= 0.98 * shadable_area_rect.size[0] * shadable_area_rect.size[1]:
+                        reshade.append((self, None))
+                    else:
+                        reshade.append((self, list(reshadable_regions)))
+
+                reshade.extend(reshade_temp)
         
         return reshade
 
-    def get_drawable_children(self):
+    def get_drawable_children(self) -> list["ShaderBounds"]:
         """
         Returns all drawable children recursively
         """
@@ -98,6 +122,16 @@ class ShaderBounds():
                 drawable_children.append(x)
             drawable_children.extend(x.get_drawable_children())
         return drawable_children
+    
+    def get_children(self) -> list["ShaderBounds"]:
+        """
+        Returns all children recursively
+        """
+        children = []
+        for x in self.children:
+            children.append(x)
+            children.extend(x.get_drawable_children())
+        return children
 
     def add_child(self, child):
         self.children.append(child)
@@ -114,4 +148,21 @@ class ShaderBounds():
         for x in self.children:
             x.calculate_child_bounds()
         self.rendered = LRect(self.pos, self.size)
-        self.rendered += sum(x.rendered for x in self.children)
+        for x in self.children:
+            self.rendered += x.rendered
+
+    def __repr__(self) -> str:
+        if self.children:
+            r = f"ShaderBounds(init: {LRect(self.pos, self.size)}, real: {self.rendered}\n"
+            for x in self.children:
+                r += textwrap.indent(repr(x), "  ")+"\n"
+            r += ")"
+            return r
+        else:
+            return f"ShaderBounds(init: {LRect(self.pos, self.size)}, real: {self.rendered})"
+
+    def get_shadable_rect(self):
+        """
+        return the shadable region as a rect
+        """
+        return LRect(self.pos, self.size)
