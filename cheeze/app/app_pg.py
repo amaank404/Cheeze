@@ -14,20 +14,27 @@ class AppPygame:
         self.clock = pygame.time.Clock()
         self.child = child
         self.child.set_build_context(build_context)
-    
+        self.static_surface: pygame.Surface = None
+
     def run(self):
         """
         Run the app with pygame backend
         """
+
+        # Initialize surfaces
         self.surf = pygame.display.set_mode(self.initial_size)
+        self.static_surface = pygame.Surface(self.initial_size)
+        self.dynamic_surface = pygame.Surface(self.initial_size)
+        
         self.running = True
         self.clock = pygame.time.Clock()
+
         while self.running:
+            dt = self.clock.tick(self.fps)/1000  # Delta time
             for evt in pygame.event.get():
                 match evt.type:
                     case pygame.QUIT:
                         self.running = False
-        
-        dt = self.clock.tick(self.fps)/1000  # Delta time
 
-        
+            # Setup all the animation frames
+            self.child.render_frame(dt)

@@ -1,9 +1,8 @@
 # Cheeze
 
-An extensible GUI library!
+This library is no longer maintained or will be maintained...
 
-This library contains abstraction for a gui library
-along with a pygame based implementation!
-Inspired mainly by flutter!
-
-## Actively a work in progress, this readme shall be updated once the project has reached a stable release
+Reasons for failiure?
+* Unable to connect the abstractions
+* Optimization problems
+* Reinventing a wheel T^T

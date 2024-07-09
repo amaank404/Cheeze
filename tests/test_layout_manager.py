@@ -74,4 +74,4 @@ class TestLayoutManagerUnits(unittest.TestCase):
 
         bounds.calculate_child_bounds()
 
-        # show_shaderbounds(bounds)
+        show_shaderbounds(bounds)

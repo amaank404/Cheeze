@@ -1,6 +1,6 @@
 from .utils import _collides_rect
 from .units import LRect
-from typing import Any
+from typing import Any, Self
 import textwrap
 
 class ShaderBounds():
@@ -24,6 +24,7 @@ class ShaderBounds():
         self.drawable = drawable
         self.partial_shader = partial_shader
         self.parent = parent
+        self.root_shaderbounds = None
 
         if children is None:
             self.children = []
@@ -133,13 +134,15 @@ class ShaderBounds():
             children.extend(x.get_drawable_children())
         return children
 
-    def add_child(self, child):
+    def add_child(self, child: Self):
         self.children.append(child)
         self.calculate_child_bounds()
+        child.set_root_shader_bounds(self.root_shaderbounds)
 
-    def remove_child(self, child):
+    def remove_child(self, child: Self):
         self.children.remove(child)
         self.calculate_child_bounds()
+        child.set_root_shader_bounds(self.root_shaderbounds)
 
     def calculate_child_bounds(self):
         """
@@ -150,6 +153,11 @@ class ShaderBounds():
         self.rendered = LRect(self.pos, self.size)
         for x in self.children:
             self.rendered += x.rendered
+
+    def set_root_shader_bounds(self, root):
+        self.root_shaderbounds = root
+        for x in self.children:
+            x.set_root_shader_bounds(root)
 
     def __repr__(self) -> str:
         if self.children:
